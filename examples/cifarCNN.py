@@ -3,11 +3,8 @@ sys.path.append(os.path.abspath(os.path.join('..'))) # in order to access the nn
 
 from tensorflow.keras.utils import to_categorical
 from tensorflow.keras.datasets import cifar10
-from nnfs.layers import Conv2d, Flatten, FC
+from nnfs import layers, activations, optimizers, models, losses
 from nnfs.activations import SReLU, Linear
-from nnfs.optimizers import SGD, Adam
-from nnfs.models import Sequential
-from nnfs.losses import CE
 import matplotlib.pyplot as plt
 import numpy.random as npr
 import numpy as np
@@ -30,18 +27,36 @@ train_y = train_y[:m]
 in_n = train_x.shape[1] # 3
 out_n = 10
 
-for opt_class, col in [(SGD, 'blue'), (Adam, 'red')]:
+for opt_class, col in [(optimizers.Adam, 'blue'), (optimizers.Adam, 'red')]:
     print('Training with:', opt_class)
-    nn = Sequential()
-    nn.add(Conv2d(32, in_n, stride=2, act_fn=SReLU))
-    nn.add(Conv2d(64, 32, stride=2, act_fn=SReLU))
-    nn.add(Conv2d(32, 64, stride=2, act_fn=SReLU))
-    nn.add(Flatten())
-    nn.add(FC(32, 4*4*32, act_fn=SReLU))
-    nn.add(FC(out_n, 32, act_fn=Linear))
+    nn = models.Sequential()
+
+    nn.add(layers.Conv2d(16, in_n, ksize=1, act_fn=SReLU))
+    nn.add(layers.DepthwiseConv2d(16, act_fn=SReLU))
+    nn.add(layers.DepthwiseConv2d(16, act_fn=SReLU))
+    nn.add(layers.Conv2d(16, 16, ksize=1, stride=1, act_fn=SReLU))
+    nn.add(layers.Pooling2d())
+
+    nn.add(layers.DepthwiseConv2d(16, act_fn=SReLU))
+    nn.add(layers.DepthwiseConv2d(16, act_fn=SReLU))
+    nn.add(layers.Conv2d(32, 16, ksize=1, stride=1, act_fn=SReLU))
+    nn.add(layers.Pooling2d())
+
+    nn.add(layers.DepthwiseConv2d(32, act_fn=SReLU))
+    nn.add(layers.DepthwiseConv2d(32, act_fn=SReLU))
+    nn.add(layers.Conv2d(16, 32, ksize=1, stride=1, act_fn=SReLU))
+    nn.add(layers.Pooling2d())
+
+    nn.add(layers.DepthwiseConv2d(16, act_fn=SReLU))
+    nn.add(layers.DepthwiseConv2d(16, act_fn=SReLU))
+    nn.add(layers.Conv2d(16, 16, ksize=1, act_fn=SReLU))
+
+    nn.add(layers.Flatten())
+    nn.add(layers.FC(32, 4*4*16, act_fn=SReLU))
+    nn.add(layers.FC(out_n, 32, act_fn=Linear))
 
     opt = opt_class(nn.layers)
-    nn.add_train_params(opt, CE())
+    nn.add_train_params(opt, losses.CE())
 
     hist = nn.fit(train_x, train_y, epochs=EPOCHS, batch_size=BATCH_SIZE)
     nn.evaluate(test_x, test_y, batch_size=BATCH_SIZE)
