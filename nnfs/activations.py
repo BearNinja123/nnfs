@@ -45,9 +45,7 @@ class Sigmoid(Activation):
         return self.act * (1 - self.act)
 
 # not an Activation subclass because of its nasty jacobian
-def softmax(x, m_axis=1):
-        reduce_dims = set([i for i in range(len(x.shape))])
-        reduce_dims.remove(m_axis)
-        reduce_dims = tuple(reduce_dims)
+def softmax(x):
+        reduce_dims = tuple([i for i in range(1, len(x.shape))])
         act = np.exp(x) / np.sum(np.exp(x), axis=reduce_dims)
         return act

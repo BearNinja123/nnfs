@@ -1,116 +1,16 @@
 from nnfs.layers import WeightActLayer
+from nnfs.backend.wbvar import WBVar
 import numpy as np
 
-# helper class so I replace "weight * a; bias * a" 
-# with: "wbvar * a"
-class WBVar:
-    def __init__(self, w_arr, bias_arr):
-        self.w = w_arr
-        self.b = bias_arr
-
-    def __add__(self, other):
-        if isinstance(other, WBVar):
-            return WBVar(self.w + other.w, self.b + other.b)
-        else:
-            return WBVar(self.w + other, self.b + other)
-
-    def __neg__(self):
-        return WBVar(-self.w, -self.b)
-
-    def __sub__(self, other):
-        return self.__add__(other.__neg__())
-
-    def __mul__(self, other):
-        if isinstance(other, WBVar):
-            return WBVar(self.w * other.w, self.b * other.b)
-        else:
-            return WBVar(self.w * other, self.b * other)
-
-    def __div__(self, other):
-        if isinstance(other, WBVar):
-            return WBVar(self.w / other.w, self.b / other.b)
-        else:
-            return WBVar(self.w / other, self.b / other)
-
-    def __truediv__(self, other):
-        return self.__div__(other)
-
-    def __pow__(self, other):
-        if isinstance(other, WBVar):
-            return WBVar(self.w ** other.w, self.b ** other.b)
-        else:
-            return WBVar(self.w ** other, self.b ** other)
-
-    def __radd__(self, other):
-        return self + other
-
-    def __rsub__(self, other):
-        return self.__add__(other.__neg__())
-
-    def __rmul__(self, other):
-        return self * other
-
-    def __rdiv__(self, other):
-        return self / other
-
-    def __rtruediv__(self, other):
-        return self / other
-
-    def __rpow__(self, other):
-        return self ** other
-
-    def __iadd__(self, other):
-        if isinstance(other, WBVar):
-            self.w += other.w
-            self.b += other.b
-        else:
-            self.w += other
-            self.b += other
-
-    def __isub__(self, other):
-        if isinstance(other, WBVar):
-            self.w -= other.w
-            self.b -= other.b
-        else:
-            self.w -= other
-            self.b -= other
-
-    def __imul__(self, other):
-        if isinstance(other, WBVar):
-            self.w *= other.w
-            self.b *= other.b
-        else:
-            self.w *= other
-            self.b *= other
-
-    def __idiv__(self, other):
-        if isinstance(other, WBVar):
-            self.w /= other.w
-            self.b /= other.b
-        else:
-            self.w /= other
-            self.b /= other
-
-    def __itruediv__(self, other):
-        self.__idiv__(other)
-
-    def __ipow__(self, other):
-        if isinstance(other, WBVar):
-            self.w **= other.w
-            self.b **= other.b
-        else:
-            self.w **= other
-            self.b **= other
-
 class Optimizer:
-    def __init__(self, layers, lr=1e-3, auto_zero_grad=True):
+    def __init__(self, layers: list, lr=1e-3, auto_zero_grad=True):
         self.lr = lr
         self.layers = list(reversed(layers))
         self.auto_zero_grad = auto_zero_grad
 
         self.grads = self._setup_layer_vars()
 
-    # setup a list with an empty WBVars of each layer, used for storing non-gradient data
+    # setup a list with an empty WBVars of each layer, used for storing gradient-like data
     def _setup_layer_vars(self, layers=None):
         if layers is None:
             layers = self.layers

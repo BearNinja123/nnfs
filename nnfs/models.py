@@ -1,23 +1,39 @@
-from nnfs.activations import *
-from nnfs.layers import *
-from nnfs.losses import *
+from nnfs import layers, metrics, activations, losses
+from nnfs.misc import logg
+from typing import List
 from tqdm import tqdm
 import numpy.random as npr
 import numpy as np
 
 class Sequential:
-    def __init__(self, layers=None, loss_fn=MSE()):
-        if layers is None:
+    def __init__(self, layers: List = None):
+        if layers is None: # i would default layers to [] instead of None but that doesn't always set layers to an empty list for some reason?
             self.layers = []
         else:
-            assert isinstance(layers, list)
-            self.layers = layers
+            self.layers = layers 
 
+        self.metrics = []
+        self.loss_fn = None
+        self.opt = None
+
+    def add_train_params(self, optimizer, loss_fn=losses.MSE(), metric_list: List[str] = ['loss', 'accuracy']):
+        metric_aliases = {
+            'loss': metrics.LossMetric(),
+            'accuracy': metrics.Accuracy(),
+            'acc': metrics.Accuracy(),
+        }
+
+        self.opt = optimizer
         self.loss_fn = loss_fn
-        self.show_acc = True
 
-    def add_opt(self, opt):
-        self.opt = opt
+        for metric_name in metric_list:
+            if metric_name in metric_aliases:
+                self.metrics.append(metric_aliases[metric_name])
+            else:
+                self.metrics.append(metric_name)
+
+    def add_loss(self, loss_fn):
+        self.loss_fn = loss_fn
 
     def add(self, layer):
         self.layers.append(layer)
@@ -37,64 +53,14 @@ class Sequential:
         delta = self.loss_fn.backward()
 
         for idx, layer in enumerate(list(reversed(self.layers))):
-            if isinstance(layer, WeightActLayer):
+            if isinstance(layer, layers.WeightActLayer):
                 self.opt.grads[idx].w += layer.backward(delta, wrt='w')
                 self.opt.grads[idx].b += layer.backward(delta, wrt='b')
                 delta = layer.backward(delta, wrt='a')
             else:
                 delta = layer.backward(delta)
 
-    def fit(self, X, y, epochs=1, batch_size=None):
-        r4 = lambda x: round(x, 4)
-
-        m = X.shape[0]
-        if batch_size is None:
-            batch_size = m
-        num_batches = m // batch_size
-        print(num_batches)
-
-        X_batched = np.split(X, num_batches, axis=0)
-        y_batched = np.split(y, num_batches, axis=0)
-
-        cost_history = {
-                'Epoch': np.arange(epochs),
-                'Cost': np.empty((epochs,)),
-                'Accuracy': np.empty((epochs,)),
-                }
-
-        for epoch in range(epochs):
-            epoch_cost = 0
-            epoch_acc = 0
-            batch_idx = 0
-
-            progress_bar = tqdm(zip(X_batched, y_batched), total=num_batches)
-            for batch_x, batch_y in progress_bar:
-                batch_idx += 1
-
-                y_pred = self(batch_x)
-
-                # calc loss and accuracy
-                loss = self.loss_fn(y_pred, batch_y)
-                epoch_cost += loss
-                tqdm_string = 'Epoch: {} | Loss: {}'.format(epoch, r4(epoch_cost / batch_idx))
-
-                if self.show_acc:
-                    y_correct = (np.argmax(y_pred, axis=1) == np.argmax(batch_y, axis=1)).astype(np.int32)
-                    accuracy = np.mean(y_correct)
-                    epoch_acc += accuracy
-                    tqdm_string += ' | Accuracy: {}'.format(r4(epoch_acc / batch_idx))
-
-                self.backward()
-                self.opt.step()
-
-                progress_bar.set_description(tqdm_string)
-
-            cost_history['Cost'][epoch] = epoch_cost / num_batches
-            cost_history['Accuracy'][epoch] = epoch_acc / num_batches
-
-        return cost_history
-
-    def evaluate(self, X, y, batch_size=None):
+    def fit(self, X, y, epochs=1, batch_size=None, train=True):
         m = batch_size * (X.shape[0] // batch_size)
 
         X = X[:m]
@@ -107,37 +73,53 @@ class Sequential:
         X_batched = np.split(X, num_batches, axis=0)
         y_batched = np.split(y, num_batches, axis=0)
 
-        metrics = {
-                'Cost': None,
-                'Accuracy': None,
-                }
+        cost_history = {'Epoch': np.arange(epochs)}
+        for metric in self.metrics:
+            cost_history[metric.name] = np.empty((epochs,))
 
-        cost = 0
-        acc = 0
-        batch_idx = 0
+        for epoch in range(epochs):
+            batch_idx = 0
+            for metric in self.metrics:
+                metric.reset()
 
-        progress_bar = tqdm(zip(X_batched, y_batched), total=num_batches)
-        for batch_x, batch_y in progress_bar:
-            y_pred = self(batch_x)
+            progress_bar = tqdm(zip(X_batched, y_batched), total=num_batches)
+            for batch_x, batch_y in progress_bar:
+                if train:
+                    tqdm_string = 'Epoch: {}'.format(epoch)
+                else:
+                    tqdm_string = 'Evaluate'
+                batch_idx += 1
 
-            # calc loss and accuracy
-            loss = self.loss_fn(y_pred, batch_y)
-            cost += loss
-            y_correct = (np.argmax(y_pred, axis=1) == np.argmax(batch_y, axis=1)).astype(np.int32)
-            accuracy = np.mean(y_correct)
-            acc += accuracy
+                y_pred = self(batch_x)
 
-            batch_idx += 1
-            progress_bar.set_description('Evaluation | Loss: {} | Accuracy: {}'.format(round(cost / batch_idx, 4), round(acc / batch_idx, 4)))
+                # calc metrics
+                loss = self.loss_fn(y_pred, batch_y)
 
-        metrics['Cost'] = cost / num_batches
-        metrics['Accuracy'] = acc / num_batches
+                for metric in self.metrics:
+                    if metric.name == 'Loss':
+                        metric.update(loss)
+                    else:
+                        metric.update(y_pred, batch_y)
+                    tqdm_string += metric.disp(batch_idx)
 
-        return metrics
+                if train:
+                    self.backward()
+                    self.opt.step()
 
+                progress_bar.set_description(tqdm_string)
+
+            for metric in self.metrics:
+                cost_history[metric.name][epoch] = metric.epoch_stat / num_batches
+
+        return cost_history
+
+    def evaluate(self, X, y, batch_size=None):
+        return self.fit(X, y, batch_size=batch_size, train=False)
+
+# A multilayer perception with specified filter count.
 class MLP(Sequential):
-    def __init__(self, input_neurons, layer_neurons, output_act=Linear, intermediate_act=SReLU, loss_fn=MSE()):
-        super().__init__([], loss_fn) # init with empty list, add layers in _setup_layers method
+    def __init__(self, input_neurons: int, layer_neurons: List[int], output_act=activations.Linear, intermediate_act=activations.SReLU):
+        super().__init__()
 
         self.intermediate_act = intermediate_act
         self.output_act = output_act
@@ -149,13 +131,14 @@ class MLP(Sequential):
     def _setup_layers(self):
         for idx, neuron_count in enumerate(self.layer_neurons):
             if idx == 0:
-                self.add(FC(neuron_count, self.input_neurons, act_fn=self.intermediate_act))
+                self.add(layers.FC(neuron_count, self.input_neurons, act_fn=self.intermediate_act))
             else:
-                self.add(FC(neuron_count, self.layer_neurons[idx-1], act_fn=self.intermediate_act))
+                self.add(layers.FC(neuron_count, self.layer_neurons[idx-1], act_fn=self.intermediate_act))
 
+# A Sequential model with Conv2d layers with specified filter and stride count as well as an ending global pooling layer.
 class CNN(Sequential):
-    def __init__(self, input_filters, layer_filters, strides=None, output_act=Linear, intermediate_act=SReLU, loss_fn=MSE()):
-        super().__init__([], loss_fn) # init with empty list, add layers in _setup_layers method
+    def __init__(self, input_filters: int, layer_filters: List[int], strides: List[int] = None, output_act=activations.Linear, intermediate_act=activations.SReLU):
+        super().__init__()
 
         if strides is None:
             self.strides = [1 for _ in range(len(layer_filters))]
@@ -176,10 +159,10 @@ class CNN(Sequential):
             else:
                 in_f = self.layer_filters[idx-1]
 
-            self.add(Conv2d(
+            self.add(layers.Conv2d(
                 filter_count, in_f,
                 act_fn=self.intermediate_act,
                 stride=self.strides[idx]
             ))
 
-        self.add(GlobalPooling2d())
+        self.add(layers.GlobalPooling2d())

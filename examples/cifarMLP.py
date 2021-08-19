@@ -1,19 +1,18 @@
 import sys, os
 sys.path.append(os.path.abspath(os.path.join('..'))) # in order to access the nnfs module from this folder
 
+from tensorflow.keras.utils import to_categorical
 from tensorflow.keras.datasets import cifar10
-from tensorflow.keras.utils import to_categorical, normalize
-from nnfs.activations import *
-from nnfs.optimizers import *
-from nnfs.layers import *
-from nnfs.models import *
-from nnfs.losses import *
+from nnfs.optimizers import SGD, Adam
+from nnfs.activations import SReLU
+from nnfs.models import MLP
+from nnfs.losses import CE
 import matplotlib.pyplot as plt
 import numpy.random as npr
 import numpy as np
 
 BATCH_SIZE = 128
-EPOCHS = 100
+EPOCHS = 3
 
 (train_x, train_y), (test_x, test_y) = cifar10.load_data()
 m = train_x.shape[0]
@@ -31,15 +30,14 @@ in_n = train_x.shape[1] # 3072
 out_n = 10
 
 for opt_class, col in [(SGD, 'blue'), (Adam, 'red')]:
-    nn = MLP(in_n, [256, 128, 64, 32, 16, out_n], intermediate_act=SReLU, loss_fn=CE())
-    print(opt_class)
-    opt = opt_class(nn.layers, lr=1e-3)
-    nn.add_opt(opt)
+    print('Training with:', opt_class)
+    nn = MLP(in_n, [256, 128, 64, 32, 16, out_n], intermediate_act=SReLU)
+    opt = opt_class(nn.layers)
+    nn.add_train_params(opt, CE())
 
     hist = nn.fit(train_x, train_y, epochs=EPOCHS, batch_size=BATCH_SIZE)
     nn.evaluate(test_x, test_y, batch_size=BATCH_SIZE)
-    print(train_y[:, :1])
-    print(softmax(nn(train_x[:, :1])))
-    plt.plot(hist['Epoch'], hist['Cost'], color=col)
+    plt.plot(hist['Epoch'], hist['Loss'], color=col)
+    print()
 
 plt.show()

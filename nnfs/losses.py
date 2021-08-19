@@ -13,9 +13,6 @@ class MSE(Loss):
         return np.mean(np.sum(self.err ** 2, axis=0))
 
     def backward(self):
-        # I would divide the value by m but the backward step 
-        # in the FC layer already takes the mean over each sample
-        # so that actually takes care of that issue
         return 2 * self.err
 
 # crossentropy with logits (softmax done on call, not before)

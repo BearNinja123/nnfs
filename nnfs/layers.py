@@ -1,5 +1,6 @@
 from nnfs.backend.conv2d_ops import *
 from nnfs.activations import Linear
+from nnfs.misc import logg
 import numpy.random as npr
 import numpy as np
 
@@ -10,8 +11,7 @@ class WeightActLayer:
         self.b = None
         self.act_fn = act_fn()
         self.inp = None
-        self.z = None
-        #self.a = None
+        #self.z = None
 
     def __call__(self, inputs):
         pass
@@ -34,7 +34,6 @@ class FC(WeightActLayer):
         self.inp = inputs
 
         x = np.dot(inputs, self.w) + self.b
-        self.z = np.copy(x)
 
         x = self.act_fn(x)
 
@@ -70,17 +69,23 @@ class Conv2d(WeightActLayer):
         else:
             self.padding = 'valid'
 
+    # all conv2d* functions are defined in nnfs/backend/conv2d_ops.py
     def __call__(self, inputs):
         self.inp = inputs
 
         if self.padding != 'valid':
             x_padded = np.pad(np.copy(inputs), self.padding)
-            self.z = conv2d(x_padded, self.w, self.stride) + self.b
+            #self.z = conv2d(x_padded, self.w, self.stride) + self.b
+            z = conv2d(x_padded, self.w, self.stride) + self.b
         else:
-            self.z = conv2d(inputs, self.w, self.stride) + self.b
-        self.a = self.act_fn(self.z)
+            #self.z = conv2d(inputs, self.w, self.stride) + self.b
+            z = conv2d(inputs, self.w, self.stride) + self.b
+        #self.a = self.act_fn(self.z)
+        #self.a = self.act_fn(z)
+        a = self.act_fn(z)
 
-        return self.a
+        #return self.a
+        return a
     
     def backward(self, delta, wrt='w'):
         assert wrt in ['w', 'a', 'b']
