@@ -1,6 +1,6 @@
 from nnfs import layers, metrics, activations, losses
 from nnfs.misc import logg
-from typing import List
+from typing import List, Tuple
 from tqdm import tqdm
 import numpy.random as npr
 import numpy as np
@@ -16,13 +16,19 @@ class Sequential:
         self.loss_fn = None
         self.opt = None
 
-    def add_train_params(self, optimizer, loss_fn=losses.MSE(), metric_list: List[str] = ['loss', 'accuracy']):
+    # create the weights and biases of the model, set up optimizers, loss functions, and metrics
+    def build(self, input_shape: Tuple[int], optimizer, loss_fn=losses.MSE(), metric_list: List[str] = ['loss', 'accuracy']):
+        x = np.zeros((1, *input_shape))
+        for layer in self.layers:
+            x = layer(x)
+
         metric_aliases = {
             'loss': metrics.LossMetric(),
             'accuracy': metrics.Accuracy(),
             'acc': metrics.Accuracy(),
         }
 
+        optimizer.set_params(self.layers)
         self.opt = optimizer
         self.loss_fn = loss_fn
 
@@ -130,10 +136,7 @@ class MLP(Sequential):
 
     def _setup_layers(self):
         for idx, neuron_count in enumerate(self.layer_neurons):
-            if idx == 0:
-                self.add(layers.FC(neuron_count, self.input_neurons, act_fn=self.intermediate_act))
-            else:
-                self.add(layers.FC(neuron_count, self.layer_neurons[idx-1], act_fn=self.intermediate_act))
+            self.add(layers.FC(neuron_count, act_fn=self.intermediate_act))
 
 # A Sequential model with Conv2d layers with specified filter and stride count as well as an ending global pooling layer.
 class CNN(Sequential):
@@ -154,13 +157,8 @@ class CNN(Sequential):
 
     def _setup_layers(self):
         for idx, filter_count in enumerate(self.layer_filters):
-            if idx == 0:
-                in_f = self.input_filters
-            else:
-                in_f = self.layer_filters[idx-1]
-
             self.add(layers.Conv2d(
-                filter_count, in_f,
+                filter_count,
                 act_fn=self.intermediate_act,
                 stride=self.strides[idx]
             ))

@@ -33,15 +33,15 @@ out_n = 10
 for opt_class, col in [(SGD, 'blue'), (Adam, 'red')]:
     print('Training with:', opt_class)
     nn = Sequential()
-    nn.add(Conv2d(16, in_n, stride=2, act_fn=SReLU))
-    nn.add(Conv2d(8, 16, stride=2, act_fn=SReLU))
-    nn.add(Conv2d(4, 8, stride=1, act_fn=SReLU))
+    nn.add(Conv2d(16, stride=2, act_fn=SReLU))
+    nn.add(Conv2d(8, stride=2, act_fn=SReLU))
+    nn.add(Conv2d(4, stride=1, act_fn=SReLU))
     nn.add(Flatten())
-    nn.add(FC(32, 49*4, act_fn=SReLU))
-    nn.add(FC(out_n, 32, act_fn=Linear))
+    nn.add(FC(32, act_fn=SReLU))
+    nn.add(FC(out_n, act_fn=Linear))
 
-    opt = opt_class(nn.layers)
-    nn.add_train_params(opt, CE())
+    opt = opt_class()
+    nn.build(train_x[0].shape, opt, CE())
 
     hist = nn.fit(train_x, train_y, epochs=EPOCHS, batch_size=BATCH_SIZE)
     nn.evaluate(test_x, test_y, batch_size=BATCH_SIZE)

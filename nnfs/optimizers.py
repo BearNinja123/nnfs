@@ -3,11 +3,14 @@ from nnfs.backend.wbvar import WBVar
 import numpy as np
 
 class Optimizer:
-    def __init__(self, layers: list, lr=1e-3, auto_zero_grad=True):
+    def __init__(self, lr=1e-3, auto_zero_grad=True):
         self.lr = lr
-        self.layers = list(reversed(layers))
+        self.layers = None
+        self.grads = None
         self.auto_zero_grad = auto_zero_grad
 
+    def set_params(self, layers: list):
+        self.layers = list(reversed(layers))
         self.grads = self._setup_layer_vars()
 
     # setup a list with an empty WBVars of each layer, used for storing gradient-like data
@@ -39,17 +42,18 @@ class Optimizer:
 class SGD(Optimizer):
     def __init__(
             self,
-            layers,
             lr=1e-3, momentum=0.9, nag=True,
             weight_decay=0.0, decoupled=True,
             auto_zero_grad=True):
 
-        super().__init__(layers, lr, auto_zero_grad)
+        super().__init__(lr, auto_zero_grad)
         self.momentum = momentum
         self.weight_decay = weight_decay
         self.decoupled = decoupled
         self.nag = nag
 
+    def set_params(self, layers: list):
+        super().set_params(layers)
         self.velocities = self._setup_layer_vars()
 
     def step(self):
@@ -88,18 +92,19 @@ class SGD(Optimizer):
 class Adam(Optimizer):
     def __init__(
             self,
-            layers,
             lr=1e-3, beta1=0.9, beta2=0.999, eps=1e-8,
             weight_decay=0.0, decoupled=True,
             auto_zero_grad=True):
 
-        super().__init__(layers, lr, auto_zero_grad)
+        super().__init__(lr, auto_zero_grad)
         self.beta1, self.beta2 = beta1, beta2
         self.weight_decay = weight_decay
         self.decoupled = decoupled
         self.eps = eps
         self.timestep = 0
 
+    def set_params(self, layers: list):
+        super().set_params(layers)
         self.moment1_biased = self._setup_layer_vars()
         self.moment2_biased = self._setup_layer_vars()
         self.moment1_unbiased = self._setup_layer_vars()

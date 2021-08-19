@@ -23,15 +23,10 @@ he_normal = lambda shape: (1 / np.sqrt(np.prod(shape[1:]))) * npr.randn(shape)
 he_truncnorm = lambda shape: (1 / np.sqrt(np.prod(shape[1:]))) * truncnorm.rvs(-2, 2, size=shape) # normal dist with (min, max) = (-2, 2)
 
 class FC(WeightActLayer):
-    def __init__(self, out_f, in_f, act_fn=Linear):
+    def __init__(self, out_f, act_fn=Linear):
         super().__init__(act_fn)
         self.out_f = out_f
-        self.in_f = in_f
-
-        he_std = (1 / np.sqrt(in_f))
-        #self.w = npr.randn(out_f, in_f) * he_std
-        self.w = he_truncnorm((out_f, in_f))
-
+        self.w = None
         self.b = np.zeros((1, out_f))
 
     def __call__(self, inputs):
@@ -57,22 +52,20 @@ class FC(WeightActLayer):
             return np.dot(der_wrt_act, self.w)
 
 class Conv2d(WeightActLayer):
-    def __init__(self, out_f, in_f, ksize=3, stride=1, padding='same', act_fn=Linear):
+    def __init__(self, out_f, ksize=3, stride=1, padding='same', act_fn=Linear):
         super().__init__(act_fn)
-        self.wsize = ksize
-        self.stride = stride
-        #he_std = 1 / np.sqrt(ksize ** 2 * in_f)
-        #self.w = np.random.randn(out_f, in_f, ksize, ksize) * he_std
         self.ksize = ksize
-        self.w = he_truncnorm((out_f, in_f, ksize, ksize))
+        self.out_f = out_f
+        self.stride = stride
+        self.ksize = ksize
+        self.w = None
         self.b = np.zeros((1, out_f, 1, 1))
 
         if padding == 'same':
-            _O, _I, ky, kx = self.w.shape
-            y_pad_top = ky // 2 # Ex: ky = 3 -> pad_top = 1; ky = 4 -> pad_top = 2
-            y_pad_bottom = (ky - 1) // 2 # Ex: ky = 3 -> pad_top = 1; ky = 4 -> pad_top = 1
-            x_pad_left = kx // 2
-            x_pad_right = (kx - 1) // 2
+            y_pad_top = ksize // 2 # Ex: ksize = 3 -> pad_top = 1; ksize = 4 -> pad_top = 2
+            y_pad_bottom = (ksize - 1) // 2 # Ex: ksize = 3 -> pad_top = 1; ksize = 4 -> pad_top = 1
+            x_pad_left = ksize // 2
+            x_pad_right = (ksize - 1) // 2
             self.padding = ((0, 0), (0, 0), (y_pad_top, y_pad_bottom), (x_pad_left, x_pad_right))
         else:
             self.padding = 'valid'
@@ -123,21 +116,18 @@ class Conv2d(WeightActLayer):
                 return conv2d_backprop_wrt_a(delta_padded, self.w)
 
 class DepthwiseConv2d(WeightActLayer):
-    def __init__(self, in_f, ksize=3, stride=1, padding='same', act_fn=Linear):
+    def __init__(self, ksize=3, stride=1, padding='same', act_fn=Linear):
         super().__init__(act_fn)
-        self.wsize = ksize
+        self.ksize = ksize
         self.stride = stride
-        #he_std = 1 / ksize
-        #self.w = np.random.randn(in_f, ksize, ksize) * he_std
-        self.w = he_truncnorm((in_f, ksize, ksize))
-        self.b = np.zeros((1, in_f, 1, 1))
+        self.w = None
+        self.b = None
 
         if padding == 'same':
-            _C, ky, kx = self.w.shape
-            y_pad_top = ky // 2 # Ex: ky = 3 -> pad_top = 1; ky = 4 -> pad_top = 2
-            y_pad_bottom = (ky - 1) // 2 # Ex: ky = 3 -> pad_top = 1; ky = 4 -> pad_top = 1
-            x_pad_left = kx // 2
-            x_pad_right = (kx - 1) // 2
+            y_pad_top = ksize // 2 # Ex: ksize = 3 -> pad_top = 1; ksize = 4 -> pad_top = 2
+            y_pad_bottom = (ksize - 1) // 2 # Ex: ksize = 3 -> pad_top = 1; ksize = 4 -> pad_top = 1
+            x_pad_left = ksize // 2
+            x_pad_right = (ksize - 1) // 2
             self.padding = ((0, 0), (0, 0), (y_pad_top, y_pad_bottom), (x_pad_left, x_pad_right))
         else:
             self.padding = 'valid'
@@ -146,7 +136,8 @@ class DepthwiseConv2d(WeightActLayer):
     def __call__(self, inputs):
         if self.w is None:
             in_f = inputs.shape[1]
-            self.w = he_truncnorm((self.out_f, in_f, self.ksize, self.ksize))
+            self.w = he_truncnorm((in_f, self.ksize, self.ksize))
+            self.b = np.zeros((1, in_f, 1, 1))
 
         self.inp = inputs
 

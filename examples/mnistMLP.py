@@ -32,8 +32,8 @@ out_n = 10
 for opt_class, col in [(SGD, 'blue'), (Adam, 'red')]:
     print('Training with:', opt_class)
     nn = MLP(in_n, [128, out_n], intermediate_act=SReLU)
-    opt = opt_class(nn.layers)
-    nn.add_train_params(optimizer=opt, loss_fn=CE())
+    opt = opt_class()
+    nn.build((in_n,), optimizer=opt, loss_fn=CE())
 
     hist = nn.fit(train_x, train_y, epochs=EPOCHS, batch_size=BATCH_SIZE)
     nn.evaluate(test_x, test_y, batch_size=BATCH_SIZE)

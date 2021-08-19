@@ -20,8 +20,8 @@ for i in range(m):
     y[i, xor_idxs[i]] = 1
 
 nn = MLP(n, [2, out_n], output_act=Linear, intermediate_act=Sigmoid)
-opt = SGD(nn.layers, lr=1e-2, momentum=0.99, nag=True)
-nn.add_train_params(opt, CE())
+opt = SGD(lr=1e-2, momentum=0.99, nag=True)
+nn.build((n,), opt, CE())
 
 hist = nn.fit(X, y, epochs=50, batch_size=4)
 plt.plot(hist['Epoch'], hist['Loss'])
