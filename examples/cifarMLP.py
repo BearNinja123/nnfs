@@ -3,15 +3,13 @@ sys.path.append(os.path.abspath(os.path.join('..'))) # in order to access the nn
 
 from tensorflow.keras.utils import to_categorical
 from tensorflow.keras.datasets import cifar10
-from nnfs.optimizers import SGD, Adam
+from nnfs import optimizers, activations, models, losses
 from nnfs.activations import SReLU
-from nnfs.models import MLP
-from nnfs.losses import CE
 import matplotlib.pyplot as plt
 import numpy.random as npr
 import numpy as np
 
-BATCH_SIZE = 128
+BATCH_SIZE = 256
 EPOCHS = 3
 
 (train_x, train_y), (test_x, test_y) = cifar10.load_data()
@@ -29,11 +27,11 @@ train_y = train_y[:m]
 in_n = train_x.shape[1] # 3072
 out_n = 10
 
-for opt_class, col in [(SGD, 'blue'), (Adam, 'red')]:
+for opt_class, col in [(optimizers.SGD_AGC, 'green'), (optimizers.SGD, 'blue'), (optimizers.Adam, 'red')]:
     print('Training with:', opt_class)
-    nn = MLP(in_n, [256, 128, 64, 32, 16, out_n], intermediate_act=SReLU)
+    nn = models.MLP(in_n, [256, 128, 64, 32, 16, out_n], intermediate_act=SReLU)
     opt = opt_class()
-    nn.build((in_n,), opt, CE())
+    nn.build((in_n,), opt, losses.CE())
 
     hist = nn.fit(train_x, train_y, epochs=EPOCHS, batch_size=BATCH_SIZE)
     nn.evaluate(test_x, test_y, batch_size=BATCH_SIZE)

@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import numpy.random as npr
 import numpy as np
 
-BATCH_SIZE = 32
+BATCH_SIZE = 256
 EPOCHS = 3
 
 (train_x, train_y), (test_x, test_y) = cifar10.load_data()
@@ -27,7 +27,7 @@ train_y = train_y[:m]
 in_n = train_x.shape[1] # 3
 out_n = 10
 
-for opt_class, col in [(optimizers.SGD, 'blue'), (optimizers.Adam, 'red')]:
+for opt_class, col in [(optimizers.SGD_AGC, 'green'), (optimizers.SGD, 'blue'), (optimizers.Adam, 'red')]:
     print('Training with:', opt_class)
     nn = models.Sequential()
 

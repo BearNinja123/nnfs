@@ -1,5 +1,6 @@
 from nnfs.layers import WeightActLayer
 from nnfs.backend.wbvar import WBVar
+from typing import List
 import numpy as np
 
 class Optimizer:
@@ -10,11 +11,12 @@ class Optimizer:
         self.auto_zero_grad = auto_zero_grad
 
     def set_params(self, layers: list):
+        # layers are reversed since the last layers receive the first gradients during backprop
         self.layers = list(reversed(layers))
         self.grads = self._setup_layer_vars()
 
     # setup a list with an empty WBVars of each layer, used for storing gradient-like data
-    def _setup_layer_vars(self, layers=None):
+    def _setup_layer_vars(self, layers: List = None) -> List[WBVar]:
         if layers is None:
             layers = self.layers
 
@@ -139,5 +141,54 @@ class Adam(Optimizer):
                 layer.w -= w_decay
 
         if self.auto_zero_grad:
-            for param in self.grads:
-                self.zero_grad()
+            self.zero_grad()
+
+# SGD with adaptive gradient clipping
+class SGD_AGC(SGD):
+    def __init__(
+            self, 
+            lr=1e-1, momentum=0.9, nag=True,
+            weight_decay=0.0, decoupled=True,
+            lb=1e-2, eps=1e-3,
+            auto_zero_grad=True):
+
+        super().__init__(
+                lr, momentum, nag,
+                weight_decay, decoupled,
+                auto_zero_grad)
+
+        self.lb = lb # gradient clipping param
+        self.eps = eps # value to allow zero-init values to change
+
+    def unitwise_norm(self, x):
+        rank = len(x.shape)
+        reduce_axes_map = {0: None, 1: None, 2: 0, 3: 0, 4: (0, 1, 2)}
+        axis = reduce_axes_map[rank]
+        keepdims = rank > 1
+        return np.sum(x ** 2, axis=axis, keepdims=keepdims) ** 0.5
+
+    def agc(self, param, grad):
+        param_norm = np.maximum(self.unitwise_norm(param), self.eps)
+        grad_norm = self.unitwise_norm(grad)
+        max_norm = param_norm * self.lb
+        # If grad norm > clipping * param_norm, rescale
+        trigger = grad_norm > max_norm
+        clipped_grad = grad * (max_norm / np.maximum(grad_norm, 1e-6))
+        grad = np.where(trigger, clipped_grad, grad)
+
+        return grad
+
+    def step(self):
+        # perform AGC
+        for layer_idx, layer in enumerate(self.layers):
+            # layer_idx == 0 to signify last FC layer is hacky but should work if the model is reasonable
+            if not isinstance(layer, WeightActLayer) or layer_idx == 0:
+                continue
+
+            # clipping for weights
+            w_grad_clipped = self.agc(layer.w, self.grads[layer_idx].w)
+            b_grad_clipped = self.agc(layer.b, self.grads[layer_idx].b)
+            self.grads[layer_idx] = WBVar(w_grad_clipped, b_grad_clipped)
+        
+        # run the step on the modified grads
+        return super().step()
